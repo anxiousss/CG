@@ -52,7 +52,8 @@ VulkanBuffer index_buffer;
 
 Vector model_position = {0.0f, 0.0f, 5.0f};
 float model_rotation;
-Vector model_color = {0.5f, 1.0f, 0.7f };
+float model_speed;
+Vector model_color = {1.0f, 1.0f, 1.0f };
 bool model_spin = true;
 
 Matrix identity() {
@@ -69,7 +70,7 @@ Matrix identity() {
 Matrix projection(float fov, float aspect_ratio, float near, float far) {
 	Matrix result{};
 
-	const float radians = fov * M_PI / 180.0f;
+	const float radians = fov * 3.14 / 180.0f;
 	const float cot = 1.0f / tanf(radians / 2.0f);
 
 	result.m[0][0] = cot / aspect_ratio;
@@ -463,12 +464,22 @@ void initialize() {
 	// (v3)------(v2)
 	Vertex vertices[] = {
 		{{-1.0f, -1.0f, 0.0f}},
+		{{-1.0f, -1.0f, 2.0f}},
 		{{1.0f, -1.0f, 0.0f}},
+		{{1.0f, -1.0f, 2.0f}},
 		{{1.0f, 1.0f, 0.0f}},
+		{{1.0f, 1.0f, 2.0f}},
 		{{-1.0f, 1.0f, 0.0f}},
+		{{-1.0f, 1.0f, 2.0f}}
 	};
 
-	uint32_t indices[] = { 0, 1, 2, 2, 3, 0 };
+	uint32_t indices[] = {1, 3, 2, 1, 2, 0,
+						  7, 1, 0, 7, 0, 6,
+						  4,5, 7, 4, 7, 6,
+						  2, 3, 5, 2, 5, 4,
+						  0, 2, 4, 0, 4, 6,
+						  1, 7, 5, 1, 5, 3};
+
 
 	vertex_buffer = createBuffer(sizeof(vertices), vertices,
 	                             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
@@ -493,17 +504,19 @@ void shutdown() {
 void update(double time) {
 	ImGui::Begin("Controls:");
 	ImGui::InputFloat3("Translation", reinterpret_cast<float*>(&model_position));
-	ImGui::SliderFloat("Rotation", &model_rotation, 0.0f, 2.0f * M_PI);
+	ImGui::InputFloat3("Color", reinterpret_cast<float*>(&model_color));
+	ImGui::SliderFloat("Rotation", &model_rotation, 0.0f, 2.0f * 3.14);
+	ImGui::SliderFloat("Rotation Speed", &model_speed, 1.0f, 5.0f);
 	ImGui::Checkbox("Spin?", &model_spin);
 	// TODO: Your GUI stuff here
 	ImGui::End();
 
 	// NOTE: Animation code and other runtime variable updates go here
 	if (model_spin) {
-		model_rotation = float(time);
+		model_rotation = float(time) * model_speed;
 	}
 
-	model_rotation = fmodf(model_rotation, 2.0f * M_PI);
+	model_rotation = fmodf(model_rotation, 2.0f * 3.14);
 }
 
 void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
@@ -574,7 +587,7 @@ void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
 		                   0, sizeof(ShaderConstants), &constants);
 
 		// NOTE: Draw 6 indices (3 vertices * 2 triangles), 1 group, no offsets
-		vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+		vkCmdDrawIndexed(cmd, 36, 1, 0, 0, 0);
 	}
 
 	vkCmdEndRenderPass(cmd);
