@@ -50,11 +50,13 @@ VkPipeline pipeline;
 VulkanBuffer vertex_buffer;
 VulkanBuffer index_buffer;
 
-Vector model_position = {0.0f, 0.0f, 5.0f};
+Vector model_position = {0.0f, 1.0f, 6.0f};
 float model_rotation;
-float model_speed;
-Vector model_color = {1.0f, 1.0f, 1.0f };
+float model_speed = 1.0f;
+Vector model_color = {0.2f, 1.0f, 0.0f };
 bool model_spin = true;
+double current_time = 0;
+float dt;
 
 Matrix identity() {
 	Matrix result{};
@@ -506,16 +508,16 @@ void update(double time) {
 	ImGui::InputFloat3("Translation", reinterpret_cast<float*>(&model_position));
 	ImGui::InputFloat3("Color", reinterpret_cast<float*>(&model_color));
 	ImGui::SliderFloat("Rotation", &model_rotation, 0.0f, 2.0f * 3.14);
-	ImGui::SliderFloat("Rotation Speed", &model_speed, 1.0f, 5.0f);
+	ImGui::SliderFloat("Rotation Speed", &model_speed, 1.0f, 10.0f);
 	ImGui::Checkbox("Spin?", &model_spin);
 	// TODO: Your GUI stuff here
 	ImGui::End();
-
 	// NOTE: Animation code and other runtime variable updates go here
+    dt = float(time - current_time);
 	if (model_spin) {
-		model_rotation = float(time) * model_speed;
+		model_rotation += dt * model_speed;
 	}
-
+    current_time = time;
 	model_rotation = fmodf(model_rotation, 2.0f * 3.14);
 }
 
@@ -575,7 +577,7 @@ void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
 				float(veekay::app.window_width) / float(veekay::app.window_height),
 				camera_near_plane, camera_far_plane),
 
-			.transform = multiply(rotation({0.0f, 1.0f, 0.0f}, model_rotation),
+			.transform = multiply(rotation({0.5f, 0.5f, 0.5f}, model_rotation),
 			                      translation(model_position)),
 
 			.color = model_color,
