@@ -54,7 +54,10 @@ Vector model_position = {0.0f, 1.0f, 6.0f};
 float model_rotation;
 float model_speed = 1.0f;
 Vector model_color = {0.2f, 1.0f, 0.0f };
+Vector rotation_axis
+ = {0.0f, 1.0f, 0.0f};
 bool model_spin = true;
+bool reverse = false;
 double current_time = 0;
 float dt;
 
@@ -506,15 +509,19 @@ void shutdown() {
 void update(double time) {
 	ImGui::Begin("Controls:");
 	ImGui::InputFloat3("Translation", reinterpret_cast<float*>(&model_position));
+	ImGui::InputFloat3("Rotaion Axis", reinterpret_cast<float*>(&rotation_axis));
 	// ImGui::InputFloat3("Color", reinterpret_cast<float*>(&model_color));
 	ImGui::SliderFloat("Rotation", &model_rotation, 0.0f, 2.0f * 3.14);
-	ImGui::SliderFloat("Rotation Speed", &model_speed, 1.0f, 10.0f);
-	ImGui::Checkbox("Spin?", &model_spin);
+	ImGui::SliderFloat("Rotation Speed", &model_speed, 0.0f, 10.0f);
+	ImGui::Checkbox("Pause?", &model_spin);
+	ImGui::Checkbox("Reverse?", &reverse);
 	// TODO: Your GUI stuff here
 	ImGui::End();
 	// NOTE: Animation code and other runtime variable updates go here
     dt = float(time - current_time);
-	if (model_spin) {
+	if (model_spin && reverse) {
+		model_rotation += dt * (-model_speed);
+	} else if (model_spin && !reverse) {
 		model_rotation += dt * model_speed;
 	}
     current_time = time;
@@ -577,7 +584,7 @@ void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
 				float(veekay::app.window_width) / float(veekay::app.window_height),
 				camera_near_plane, camera_far_plane),
 
-			.transform = multiply(rotation({0.0f, 1.0f, 0.0f}, model_rotation),
+			.transform = multiply(rotation(rotation_axis, model_rotation),
 			                      translation(model_position)),
 
 			.color = model_color,
