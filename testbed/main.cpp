@@ -26,7 +26,7 @@ struct Vector {
 
 struct Vertex {
 	Vector position;
-	// NOTE: You can add more attributes
+	Vector color;
 };
 
 // NOTE: These variable will be available to shaders through push constant uniform
@@ -312,12 +312,12 @@ void initialize() {
 				.offset = offsetof(Vertex, position), // NOTE: Offset of "position" field in a Vertex struct
 			},
 			// NOTE: If you want more attributes per vertex, declare them here
-#if 0
+#if 1
 			{
 				.location = 1, // NOTE: Second attribute
 				.binding = 0,
-				.format = VK_FORMAT_XXX,
-				.offset = offset(Vertex, your_attribute),
+				.format = VK_FORMAT_R32G32B32_SFLOAT,
+				.offset = offsetof(Vertex, color),
 			},
 #endif
 		};
@@ -465,14 +465,14 @@ void initialize() {
 	//  |       \  |
 	// (v3)------(v2)
 	Vertex vertices[] = {
-		{{-1.0f, -1.0f, 0.0f}},
-		{{-1.0f, -1.0f, 2.0f}},
-		{{1.0f, -1.0f, 0.0f}},
-		{{1.0f, -1.0f, 2.0f}},
-		{{1.0f, 1.0f, 0.0f}},
-		{{1.0f, 1.0f, 2.0f}},
-		{{-1.0f, 1.0f, 0.0f}},
-		{{-1.0f, 1.0f, 2.0f}}
+		{{-1.0f, -1.0f, 0.0f}, {0.2f, 0.7f, 1.0f}},
+		{{-1.0f, -1.0f, 2.0f}, {1.0f, 0.0f, 0.5f}},
+		{{1.0f, -1.0f, 0.0f}, {0.3f, 0.1f, 1.0f}},
+		{{1.0f, -1.0f, 2.0f}, {0.2f, 1.0f, 1.0f}},
+		{{1.0f, 1.0f, 0.0f}, {1.0f, 0.5f, 0.4f}},
+		{{1.0f, 1.0f, 2.0f}, {0.4f, 0.3f, 0.2f}},
+		{{-1.0f, 1.0f, 0.0f}, {0.2f, 0.7f, 1.0f}},
+		{{-1.0f, 1.0f, 2.0f}, {1.0f, 1.0f, 1.0f}}
 	};
 
 	uint32_t indices[] = {1, 3, 2, 1, 2, 0,
@@ -506,7 +506,7 @@ void shutdown() {
 void update(double time) {
 	ImGui::Begin("Controls:");
 	ImGui::InputFloat3("Translation", reinterpret_cast<float*>(&model_position));
-	ImGui::InputFloat3("Color", reinterpret_cast<float*>(&model_color));
+	// ImGui::InputFloat3("Color", reinterpret_cast<float*>(&model_color));
 	ImGui::SliderFloat("Rotation", &model_rotation, 0.0f, 2.0f * 3.14);
 	ImGui::SliderFloat("Rotation Speed", &model_speed, 1.0f, 10.0f);
 	ImGui::Checkbox("Spin?", &model_spin);
@@ -577,7 +577,7 @@ void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
 				float(veekay::app.window_width) / float(veekay::app.window_height),
 				camera_near_plane, camera_far_plane),
 
-			.transform = multiply(rotation({0.5f, 0.5f, 0.5f}, model_rotation),
+			.transform = multiply(rotation({0.0f, 1.0f, 0.0f}, model_rotation),
 			                      translation(model_position)),
 
 			.color = model_color,
