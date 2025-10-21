@@ -1,3 +1,5 @@
+#define _USE_MATH_DEFINES
+
 #include <cstdint>
 #include <climits>
 #include <vector>
@@ -54,8 +56,7 @@ Vector model_position = {0.0f, 1.0f, 6.0f};
 float model_rotation;
 float model_speed = 1.0f;
 Vector model_color = {0.2f, 1.0f, 0.0f };
-Vector rotation_axis
- = {0.0f, 1.0f, 0.0f};
+Vector rotation_axis = {0.0f, 1.0f, 0.0f};
 bool model_spin = true;
 bool reverse = false;
 double current_time = 0;
@@ -75,7 +76,7 @@ Matrix identity() {
 Matrix projection(float fov, float aspect_ratio, float near, float far) {
 	Matrix result{};
 
-	const float radians = fov * 3.14 / 180.0f;
+	const float radians = fov * M_PI / 180.0f;
 	const float cot = 1.0f / tanf(radians / 2.0f);
 
 	result.m[0][0] = cot / aspect_ratio;
@@ -468,14 +469,14 @@ void initialize() {
 	//  |       \  |
 	// (v3)------(v2)
 	Vertex vertices[] = {
-		{{-1.0f, -1.0f, 0.0f}, {0.2f, 0.7f, 1.0f}},
-		{{-1.0f, -1.0f, 2.0f}, {1.0f, 0.0f, 0.5f}},
-		{{1.0f, -1.0f, 0.0f}, {0.3f, 0.1f, 1.0f}},
-		{{1.0f, -1.0f, 2.0f}, {0.2f, 1.0f, 1.0f}},
-		{{1.0f, 1.0f, 0.0f}, {1.0f, 0.5f, 0.4f}},
-		{{1.0f, 1.0f, 2.0f}, {0.4f, 0.3f, 0.2f}},
-		{{-1.0f, 1.0f, 0.0f}, {0.2f, 0.7f, 1.0f}},
-		{{-1.0f, 1.0f, 2.0f}, {1.0f, 1.0f, 1.0f}}
+		{{-0.5f, -0.5f, -0.5f}, {0.2f, 0.7f, 1.0f}},
+		{{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.5f}},
+		{{0.5f, -0.5f, -0.5f}, {0.3f, 0.1f, 1.0f}},
+		{{0.5f, -0.5f, 0.5f}, {0.2f, 1.0f, 1.0f}},
+		{{0.5f, 0.5f, -0.5f}, {1.0f, 0.5f, 0.4f}},
+		{{0.5f, 0.5f, 0.5f}, {0.4f, 0.3f, 0.2f}},
+		{{-0.5f, 0.5f, -0.5f}, {0.2f, 0.7f, 1.0f}},
+		{{-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 	};
 
 	uint32_t indices[] = {1, 3, 2, 1, 2, 0,
@@ -511,7 +512,7 @@ void update(double time) {
 	ImGui::InputFloat3("Translation", reinterpret_cast<float*>(&model_position));
 	ImGui::InputFloat3("Rotaion Axis", reinterpret_cast<float*>(&rotation_axis));
 	// ImGui::InputFloat3("Color", reinterpret_cast<float*>(&model_color));
-	ImGui::SliderFloat("Rotation", &model_rotation, 0.0f, 2.0f * 3.14);
+	ImGui::SliderFloat("Rotation", &model_rotation, 0.0f, 2.0f * M_PI);
 	ImGui::SliderFloat("Rotation Speed", &model_speed, 0.0f, 10.0f);
 	ImGui::Checkbox("Pause?", &model_spin);
 	ImGui::Checkbox("Reverse?", &reverse);
@@ -525,7 +526,7 @@ void update(double time) {
 		model_rotation += dt * model_speed;
 	}
     current_time = time;
-	model_rotation = fmodf(model_rotation, 2.0f * 3.14);
+	model_rotation = fmodf(model_rotation, 2.0f * M_PI);
 }
 
 void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
