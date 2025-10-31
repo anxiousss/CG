@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <cmath>
 
+#define M_PI 3.14
+
 namespace veekay {
 
 union vec2 {
@@ -343,6 +345,16 @@ union mat4 {
 		return result;
 	}
 
+	static mat4 inverse_translation (vec3 vector) {
+		mat4 result = mat4::identity();
+
+		result[3][0] = -vector.x;
+		result[3][1] = -vector.y;
+		result[3][2] = -vector.z;
+
+		return result;
+	};
+
 	static mat4 scaling(vec3 vector) {
 		mat4 result{};
 
@@ -354,7 +366,18 @@ union mat4 {
 		return result;
 	}
 
-	static mat4 rotation(vec3 axis, float angle) {
+	static mat4 inverse_scaling(vec3 vector) {
+		mat4 result{};
+
+		result[0][0] = 1 / vector.x;
+		result[1][1] = 1 / vector.y;
+		result[2][2] = 1 / vector.z;
+		result[3][3] = 1.0f;
+
+		return result;
+	}
+
+	static mat4 rotation(vec3 axis, float angle	) {
 		mat4 result{};
 
 		float length = sqrtf(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
@@ -382,6 +405,10 @@ union mat4 {
 		result[3][3] = 1.0f;
 
 		return result;
+	}
+
+	static mat4 inverse_rotation(vec3 axis, float angle) {
+		return transpose(rotation(axis, angle));
 	}
 
 	static mat4 projection(float fov, float aspect_ratio, float near, float far) {

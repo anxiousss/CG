@@ -62,14 +62,17 @@ struct Camera {
 	constexpr static float default_far_plane = 100.0f;
 
 	veekay::vec3 position = {};
-	veekay::vec3 rotation = {};
+	veekay::vec3 rotation = {1.0f, 45.0f, 1.0f};
+    veekay::vec3 scale = {1.0f, 1.0f, 1.0f};
 
-	float fov = default_fov;
+
+    float fov = default_fov;
 	float near_plane = default_near_plane;
 	float far_plane = default_far_plane;
 
 	// NOTE: View matrix of camera (inverse of a transform)
 	veekay::mat4 view() const;
+	veekay::mat4 inverse_view() const;
 
 	// NOTE: View and projection composition
 	veekay::mat4 view_projection(float aspect_ratio) const;
@@ -116,23 +119,42 @@ float toRadians(float degrees) {
 veekay::mat4 Transform::matrix() const {
 	// TODO: Scaling and rotation
 
-	auto t = veekay::mat4::translation(position);
+	auto t = veekay::mat4::translation(position) *
+			veekay::mat4::rotation({0.0f, 0.0f, 1.0f}, toRadians(rotation.z)) *
+			veekay::mat4::rotation({0.0f, 1.0f, 0.0f}, toRadians(rotation.y)) *
+			veekay::mat4::rotation({1.0f, 0.0f, 0.0f}, toRadians(rotation.x)) *
+			veekay::mat4::scaling(scale);
 
 	return t;
 }
 
+
+
 veekay::mat4 Camera::view() const {
 	// TODO: Rotation
 
-	auto t = veekay::mat4::translation(-position);
+	auto t = veekay::mat4::translation(-position) *
+			veekay::mat4::rotation({0.0f, 0.0f, 1.0f}, toRadians(rotation.z)) *
+			veekay::mat4::rotation({0.0f, 1.0f, 0.0f}, toRadians(rotation.y)) *
+			veekay::mat4::rotation({1.0f, 0.0f, 0.0f}, toRadians(rotation.x)) *
+			veekay::mat4::scaling(scale);
+	return t;
+}
 
+veekay::mat4 Camera::inverse_view() const {
+
+	auto t = veekay::mat4::inverse_scaling(scale) *
+			 veekay::mat4::inverse_rotation({1.0f, 0.0f, 0.0f}, toRadians(rotation.x)) *
+			 veekay::mat4::inverse_rotation({0.0f, 1.0f, 0.0f}, toRadians(rotation.y)) *
+			 veekay::mat4::inverse_rotation({0.0f, 0.0f, 1.0f}, toRadians(rotation.z)) *
+			 veekay::mat4::inverse_translation(position);
 	return t;
 }
 
 veekay::mat4 Camera::view_projection(float aspect_ratio) const {
 	auto projection = veekay::mat4::projection(fov, aspect_ratio, near_plane, far_plane);
 
-	return view() * projection;
+	return inverse_view() * projection;
 }
 
 // NOTE: Loads shader byte code from file
@@ -328,7 +350,7 @@ void initialize(VkCommandBuffer cmd) {
 					.descriptorCount = 8,
 				}
 			};
-			
+
 			VkDescriptorPoolCreateInfo info{
 				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 				.maxSets = 1,
@@ -404,7 +426,7 @@ void initialize(VkCommandBuffer cmd) {
 			veekay::app.running = false;
 			return;
 		}
-		
+
 		VkGraphicsPipelineCreateInfo info{
 			.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 			.stageCount = 2,
@@ -643,6 +665,8 @@ void shutdown() {
 
 void update(double time) {
 	ImGui::Begin("Controls:");
+	ImGui::InputFloat3("Camera Rotation", reinterpret_cast<float*>(&(camera.rotation)));
+	ImGui::InputFloat3("Camera Position", reinterpret_cast<float*>(&(camera.position)));
 	ImGui::End();
 
 	if (!ImGui::IsWindowHovered()) {
@@ -652,7 +676,7 @@ void update(double time) {
 			auto move_delta = mouse::cursorDelta();
 
 			// TODO: Use mouse_delta to update camera rotation
-			
+
 			auto view = camera.view();
 
 			// TODO: Calculate right, up and front from view matrix
