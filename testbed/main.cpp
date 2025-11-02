@@ -18,6 +18,9 @@
 namespace {
 
 constexpr uint32_t max_models = 1024;
+constexpr uint32_t max_point_lights = 16;
+constexpr uint32_t max_spot_lights = 16;
+
 
 struct Vertex {
 	veekay::vec3 position;
@@ -28,14 +31,39 @@ struct Vertex {
 
 struct SceneUniforms {
 	veekay::mat4 view_projection;
+    veekay::vec3 view_position; float _pad0;
+    veekay::vec3 ambient_light_intensity; float _pad1;
+    veekay::vec3 sun_light_direction; float _pad2;
+    veekay::vec3 sun_light_color; float _pad3;
+
+	uint32_t point_lights_count;
+	uint32_t spot_lights_count;
 };
 
 struct ModelUniforms {
 	veekay::mat4 model;
 	veekay::vec3 albedo_color; float _pad0;
+	veekay::vec3 specular_color; float _pad1;
+	float shininess;
 };
 
-struct Mesh {
+
+struct PointLight {
+	veekay::vec3 position;
+	float radius;
+	veekay::vec3 color; float _pad0;
+};
+
+struct SpotLight {
+	veekay::vec3 position;
+	float radius;
+	veekay::vec3 direction;
+	float angle; // Косинус угла
+	veekay::vec3 color; float _pad0;
+};
+
+
+	struct Mesh {
 	veekay::graphics::Buffer* vertex_buffer;
 	veekay::graphics::Buffer* index_buffer;
 	uint32_t indices;
@@ -62,7 +90,7 @@ struct Camera {
 	constexpr static float default_far_plane = 100.0f;
 
 	veekay::vec3 position = {};
-	veekay::vec3 rotation = {1.0f, 45.0f, 1.0f};
+	veekay::vec3 rotation = {0.0f, 45.0f, 0.0f};
     veekay::vec3 scale = {1.0f, 1.0f, 1.0f};
 
 
@@ -101,6 +129,9 @@ inline namespace {
 
 	veekay::graphics::Buffer* scene_uniforms_buffer;
 	veekay::graphics::Buffer* model_uniforms_buffer;
+
+	veekay::graphics::Buffer* point_lights_buffer;
+	veekay::graphics::Buffer* spot_lights_buffer;
 
 	Mesh plane_mesh;
 	Mesh cube_mesh;
@@ -348,7 +379,11 @@ void initialize(VkCommandBuffer cmd) {
 				{
 					.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.descriptorCount = 8,
-				}
+				},
+					{
+					.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+					.descriptorCount = 8
+				},
 			};
 
 			VkDescriptorPoolCreateInfo info{
@@ -381,6 +416,18 @@ void initialize(VkCommandBuffer cmd) {
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 				},
+				{
+					.binding = 2,
+					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+					.descriptorCount = 1,
+					.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+				},
+					{
+					.binding = 3,
+					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+					.descriptorCount = 1,
+					.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+				}
 			};
 
 			VkDescriptorSetLayoutCreateInfo info{
@@ -461,6 +508,17 @@ void initialize(VkCommandBuffer cmd) {
 		nullptr,
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
+	point_lights_buffer = new veekay::graphics::Buffer(
+			max_point_lights * sizeof(PointLight),
+			nullptr,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+
+	spot_lights_buffer = new veekay::graphics::Buffer(
+			max_spot_lights * sizeof(SpotLight),
+			nullptr,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+
+
 	// NOTE: This texture and sampler is used when texture could not be loaded
 	{
 		VkSamplerCreateInfo info{
@@ -496,6 +554,15 @@ void initialize(VkCommandBuffer cmd) {
 				.offset = 0,
 				.range = sizeof(ModelUniforms),
 			},
+			{
+				.buffer = point_lights_buffer->buffer,
+				.range = max_point_lights * sizeof(PointLight)
+			},
+			{
+					.buffer = spot_lights_buffer->buffer,
+					.range = max_spot_lights * sizeof(SpotLight)
+			}
+
 		};
 
 		VkWriteDescriptorSet write_infos[] = {
@@ -517,13 +584,31 @@ void initialize(VkCommandBuffer cmd) {
 				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
 				.pBufferInfo = &buffer_infos[1],
 			},
+			{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = descriptor_set,
+				.dstBinding = 2,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pBufferInfo = &buffer_infos[2],
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = descriptor_set,
+				.dstBinding = 3,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pBufferInfo = &buffer_infos[3],
+			}
 		};
 
 		vkUpdateDescriptorSets(device, sizeof(write_infos) / sizeof(write_infos[0]),
 		                       write_infos, 0, nullptr);
 	}
 
-	// NOTE: Plane mesh initialization
+		// NOTE: Plane mesh initialization
 	{
 		// (v0)------(v1)
 		//  |  \       |
@@ -653,6 +738,9 @@ void shutdown() {
 
 	delete model_uniforms_buffer;
 	delete scene_uniforms_buffer;
+
+	delete point_lights_buffer;
+	delete spot_lights_buffer;
 
 	vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
 	vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
