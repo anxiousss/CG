@@ -11,7 +11,6 @@
 #include <imgui.h>
 #include <vulkan/vulkan_core.h>
 #include <lodepng.h>
-
 namespace {
     constexpr uint32_t max_models = 1024;
     constexpr uint32_t max_point_lights = 16;
@@ -134,7 +133,7 @@ namespace {
     }
 
     inline namespace {
-        veekay::vec3 ambient_light = {0.05f, 0.05f, 0.05f};
+        veekay::vec3 ambient_light = {1.f, 1.f, 1.f};
         veekay::vec3 sun_direction = {0.0f, 1.0f, -1.0f};
         veekay::vec3 sun_color = { 0.2f, 0.2f, 0.2f};
 
@@ -749,7 +748,6 @@ namespace {
                 }
         });
 
-        // Аллокация наборов дескрипторов для материалов
         {
             descriptor_sets_material.resize(models.size());
             if (!models.empty()) {
@@ -784,8 +782,22 @@ namespace {
 
             for (size_t i = 0; i < models.size(); ++i) {
                 auto& M = models[i].material;
+                if (i == 0) {
+                    M.albedo = load_png("./assets/SMILEFACE_imresizer.png");
+                }
 
-                M.albedo = load_png("./assets/lenna.png");
+                if (i == 1) {
+                    M.albedo = load_png("./assets/lenna.png");
+                }
+
+                if (i == 2) {
+                    M.albedo = load_png("./assets/Tree.png");
+                }
+
+                if (i == 3) {
+                    M.albedo = load_png("./assets/trollface.png");
+                }
+
                 if (!M.albedo) M.albedo = missing_texture;
                 M.specular = g_white1x1;
                 M.emissive = g_black1x1;
@@ -1175,7 +1187,6 @@ namespace {
         vkEndCommandBuffer(cmd);
     }
 } // namespace
-
 int main() {
     return veekay::run({
                                .init = initialize,

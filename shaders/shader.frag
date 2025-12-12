@@ -132,7 +132,5 @@ void main() {
         total_light += (diffuse_color + specular_result) * attenuation;
     }
 
-    // Gamma correction
-    total_light = pow(total_light, vec3(1.0/2.2));
     final_color = vec4(total_light, 1.0);
 }
