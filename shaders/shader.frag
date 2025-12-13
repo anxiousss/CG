@@ -3,6 +3,7 @@
 layout(location = 0) in vec3 f_position;
 layout(location = 1) in vec3 f_normal;
 layout(location = 2) in vec2 f_uv;
+layout(location = 3) in vec4 f_shadow_position;
 
 layout(location = 0) out vec4 final_color;
 
@@ -15,6 +16,7 @@ layout(set = 0, binding = 0, std140) uniform SceneUniforms {
     uint point_lights_count;
     uint spot_lights_count;
     float _pad4; float _pad5;
+    mat4 shadow_projection;
 };
 
 layout(set = 0, binding = 1, std140) uniform ModelUniforms {
@@ -48,9 +50,12 @@ layout(set = 0, binding = 3, std430) readonly buffer SpotLights {
     SpotLight spot_lights[];
 };
 
+layout(set = 0, binding = 4) uniform sampler2DShadow shadow_texture; // Изменено на sampler2DShadow
+
 layout(set = 1, binding = 0) uniform sampler2D albedo_texture;
 layout(set = 1, binding = 1) uniform sampler2D specular_texture;
 layout(set = 1, binding = 2) uniform sampler2D emissive_texture;
+
 
 void main() {
     vec3 normal = normalize(f_normal);
@@ -63,17 +68,24 @@ void main() {
     vec3 albedo = albedo_color * albedo_tex;
     vec3 emissive = emissive_tex * 0.1;
 
+    // Вычисляем тень
+    vec3 shadow_pos = f_shadow_position.xyz / f_shadow_position.w;
+
+    shadow_pos.xy = shadow_pos.xy * 0.5 + 0.5;
+    float shadow = texture(shadow_texture, shadow_pos).r;
+
+
     vec3 total_light = ambient_light_intensity * albedo + emissive;
 
-    // Sun lighting (directional light)
+    // Sun lighting (directional light) с учетом тени
     vec3 sun_light_dir = normalize(-sun_light_direction);
     float sun_diffuse = max(dot(normal, sun_light_dir), 0.0);
     vec3 sun_half_dir = normalize(sun_light_dir + view_dir);
     float sun_specular = pow(max(dot(normal, sun_half_dir), 0.0), shininess);
 
-    total_light += (sun_diffuse * albedo + sun_specular * specular_color * specular_mask) * sun_light_color;
+    total_light += shadow * (sun_diffuse * albedo + sun_specular * specular_color * specular_mask) * sun_light_color;
 
-    // Point lights with inverse square law attenuation
+    // Point lights (точечные источники не дают теней в этой реализации)
     for (uint i = 0; i < point_lights_count; ++i) {
         PointLight light = point_lights[i];
         vec3 light_dir = normalize(light.position - f_position);
@@ -81,10 +93,7 @@ void main() {
 
         if (distance > light.radius) continue;
 
-        // Inverse square law attenuation with minimum distance to prevent singularity
         float attenuation = 1.0 / (1.0 + 0.1 * distance + 0.01 * distance * distance);
-
-        // Additional smooth falloff at radius boundary
         float radius_attenuation = 1.0 - smoothstep(light.radius * 0.7, light.radius, distance);
         attenuation *= radius_attenuation;
 
@@ -98,7 +107,7 @@ void main() {
         total_light += (diffuse_color + specular_result) * attenuation;
     }
 
-    // Spot lights with inverse square law attenuation
+    // Spot lights
     for (uint i = 0; i < spot_lights_count; ++i) {
         SpotLight light = spot_lights[i];
         vec3 light_dir = normalize(light.position - f_position);
@@ -109,16 +118,11 @@ void main() {
         vec3 spot_dir = normalize(-light.direction);
         float cos_theta = dot(light_dir, spot_dir);
 
-        // Skip if outside spotlight cone
         if (cos_theta < light.angle) continue;
 
         float attenuation = 1.0 / (1.0 + 0.1 * distance + 0.01 * distance * distance);
-
-        // Smooth angular falloff
         float outer_angle = light.angle * 0.8;
         float spot_factor = clamp((cos_theta - outer_angle) / (light.angle - outer_angle), 0.0, 1.0);
-
-        // Smooth radius falloff
         float radius_attenuation = 1.0 - smoothstep(light.radius * 0.7, light.radius, distance);
         attenuation *= spot_factor * radius_attenuation;
 

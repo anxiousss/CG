@@ -455,6 +455,48 @@ union mat4 {
 		return result;
 	}
 
+	static mat4 lookAt(vec3 eye, vec3 target) {
+		// vec3 f = vec3::normalized(center - eye);
+		// vec3 s = vec3::normalized(vec3::cross(f, up));
+		// vec3 u = vec3::cross(s, f);
+		//
+		// mat4 result = identity();
+
+		const vec3 forward = vec3::normalized(eye - target);
+
+		vec3 world_up = {0, 1, 0};
+
+		vec3 right = vec3::normalized(vec3::cross(forward, world_up));
+
+		vec3 up = vec3::normalized(vec3::cross(right, forward));
+
+		const mat4 basis = {
+				right.x, up.x, -forward.x, 0,
+				right.y, up.y, -forward.y, 0,
+				right.z, up.z, -forward.z, 0,
+				0, 0, 0, 1
+		};
+
+		return translation(-eye) * basis;
+	}
+
+
+
+	static mat4 ortho(float left, float right, float bottom, float top, float near, float far) {
+		mat4 result = identity();
+
+		result[0][0] = 2.0f / (right - left);
+		result[1][1] = 2.0f / (top - bottom);
+
+		result[2][2] = 1.0f / (far - near);
+		result[3][2] = -near / (far - near);
+
+		result[3][0] = -(right + left) / (right - left);
+		result[3][1] = -(top + bottom) / (top - bottom);
+
+		return result;
+	}
+
 	vec4& operator[](size_t index) { return columns[index]; }
 	const vec4& operator[](size_t index) const { return columns[index]; }
 };
