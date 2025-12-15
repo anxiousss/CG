@@ -12,7 +12,6 @@
 #include <vulkan/vulkan_core.h>
 #include <lodepng.h>
 
-// Функция для поиска подходящего типа памяти
 namespace veekay {
     namespace graphics {
 
@@ -32,8 +31,8 @@ namespace veekay {
             return 0;
         }
 
-    } // namespace graphics
-} // namespace veekay
+    }
+}
 
 
 
@@ -64,7 +63,7 @@ namespace {
         uint32_t point_lights_count;
         uint32_t spot_lights_count;
         float _pad4; float _pad5;
-        veekay::mat4 shadow_projection; // Добавлено для теней
+        veekay::mat4 shadow_projection;
     };
 
     struct ModelUniforms {
@@ -176,73 +175,11 @@ namespace {
 
     } shadow;
 
-    veekay::vec3 sun_light_direction{0.0f, 1.0f, 1.0f};
+    veekay::vec3 sun_light_direction{0.6f, 1.0f, 1.0f};
 
     PFN_vkCmdBeginRenderingKHR vkCmdBeginRenderingKHR;
     PFN_vkCmdEndRenderingKHR vkCmdEndRenderingKHR;
 
-    VkRenderPass createShadowRenderPass(VkDevice device, VkFormat depthFormat) {
-        VkAttachmentDescription depthAttachment{
-                .format = depthFormat,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-        };
-
-        VkAttachmentReference depthAttachmentRef{
-                .attachment = 0,
-                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        };
-
-        VkSubpassDescription subpass{
-                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                .colorAttachmentCount = 0,
-                .pDepthStencilAttachment = &depthAttachmentRef,
-        };
-
-        VkSubpassDependency dependency{
-                .srcSubpass = VK_SUBPASS_EXTERNAL,
-                .dstSubpass = 0,
-                .srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-        };
-
-        VkSubpassDependency dependency2{
-                .srcSubpass = 0,
-                .dstSubpass = VK_SUBPASS_EXTERNAL,
-                .srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-        };
-
-        VkSubpassDependency dependencies[] = {dependency, dependency2};
-
-        VkRenderPassCreateInfo renderPassInfo{
-                .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                .attachmentCount = 1,
-                .pAttachments = &depthAttachment,
-                .subpassCount = 1,
-                .pSubpasses = &subpass,
-                .dependencyCount = 2,
-                .pDependencies = dependencies,
-        };
-
-        VkRenderPass renderPass;
-        if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create shadow render pass!");
-        }
-
-        return renderPass;
-    }
 
     inline namespace {
         Camera camera{
@@ -257,8 +194,8 @@ namespace {
 
     inline namespace {
         veekay::vec3 ambient_light = {1.f, 1.f, 1.f};
-        veekay::vec3 sun_direction = {0.0f, 1.0f, -1.0f};
-        veekay::vec3 sun_color = { 0.2f, 0.2f, 0.2f};
+        veekay::vec3 sun_direction = {0.6f, 1.0f, -1.0f};
+        veekay::vec3 sun_color = { 1.0f, 1.0f, 1.0f};
 
         VkShaderModule vertex_shader_module;
         VkShaderModule fragment_shader_module;
@@ -394,95 +331,6 @@ namespace {
         return new veekay::graphics::Texture(cmd, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, &rgba);
     }
 
-    void createShadowMapImage(VkCommandBuffer cmd) {
-        VkDevice& device = veekay::app.vk_device;
-
-        shadow.depth_image_format = VK_FORMAT_D32_SFLOAT;
-
-        VkImageCreateInfo image_info{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                .imageType = VK_IMAGE_TYPE_2D,
-                .format = shadow.depth_image_format,
-                .extent = {shadow.size, shadow.size, 1},
-                .mipLevels = 1,
-                .arrayLayers = 1,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .tiling = VK_IMAGE_TILING_OPTIMAL,
-                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        };
-
-        if (vkCreateImage(device, &image_info, nullptr, &shadow.depth_image) != VK_SUCCESS) {
-            std::cerr << "Failed to create shadow map image\n";
-            veekay::app.running = false;
-            return;
-        }
-
-        VkMemoryRequirements mem_reqs;
-        vkGetImageMemoryRequirements(device, shadow.depth_image, &mem_reqs);
-
-        VkMemoryAllocateInfo alloc_info{
-                .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                .allocationSize = mem_reqs.size,
-                .memoryTypeIndex = veekay::graphics::findMemoryType(
-                        mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-        };
-
-        if (vkAllocateMemory(device, &alloc_info, nullptr, &shadow.depth_image_memory) != VK_SUCCESS) {
-            std::cerr << "Failed to allocate shadow map memory\n";
-            veekay::app.running = false;
-            return;
-        }
-
-        vkBindImageMemory(device, shadow.depth_image, shadow.depth_image_memory, 0);
-
-        VkImageViewCreateInfo view_info{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                .image = shadow.depth_image,
-                .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                .format = shadow.depth_image_format,
-                .subresourceRange = {
-                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                        .baseMipLevel = 0,
-                        .levelCount = 1,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1
-                }
-        };
-
-        if (vkCreateImageView(device, &view_info, nullptr, &shadow.depth_image_view) != VK_SUCCESS) {
-            std::cerr << "Failed to create shadow map image view\n";
-            veekay::app.running = false;
-            return;
-        }
-
-        // Создаем render pass для теней
-
-
-
-        // Переводим изображение в правильный layout
-        VkImageMemoryBarrier barrier{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .srcAccessMask = 0,
-                .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                .image = shadow.depth_image,
-                .subresourceRange = {
-                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                        .baseMipLevel = 0,
-                        .levelCount = 1,
-                        .baseArrayLayer = 0,
-                        .layerCount = 1
-                }
-        };
-
-        vkCmdPipelineBarrier(cmd,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                             0, 0, nullptr, 0, nullptr, 1, &barrier);
-    }
 
     void initialize(VkCommandBuffer cmd) {
         VkDevice& device = veekay::app.vk_device;
@@ -494,14 +342,12 @@ namespace {
         vkCmdEndRenderingKHR = reinterpret_cast<PFN_vkCmdEndRenderingKHR>(
                 vkGetDeviceProcAddr(device, "vkCmdEndRenderingKHR"));
 
-        // 1. Сначала получаем свойства устройства и вычисляем выравнивание
         {
             VkPhysicalDeviceProperties props{};
             vkGetPhysicalDeviceProperties(physical_device, &props);
             g_ubo_align = uint32_t(props.limits.minUniformBufferOffsetAlignment);
             g_model_stride = uint32_t(align_up(sizeof(ModelUniforms), g_ubo_align));
 
-            // Создаем основные буферы ДО их использования
             scene_uniforms_buffer = new veekay::graphics::Buffer(
                     sizeof(SceneUniforms),
                     nullptr,
@@ -520,7 +366,6 @@ namespace {
                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
         }
 
-        // 2. Создаем основные текстуры
         {
             g_black1x1 = makeSolidTexture(cmd, 0xff000000u);
             g_white1x1 = makeSolidTexture(cmd, 0xffffffffu);
@@ -539,7 +384,6 @@ namespace {
             missing_texture = new veekay::graphics::Texture(cmd, 16, 16, VK_FORMAT_R8G8B8A8_UNORM, pixels.data());
         }
 
-        // 3. Создаем основной графический конвейер
         {
             vertex_shader_module = loadShaderModule("./shaders/shader.vert.spv");
             if (!vertex_shader_module) {
@@ -659,7 +503,6 @@ namespace {
                     .pAttachments = &attachment_info
             };
 
-            // Создаем descriptor pool
             {
                 VkDescriptorPoolSize pools[] = {
                         {
@@ -681,7 +524,7 @@ namespace {
                 };
                 VkDescriptorPoolCreateInfo info{
                         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-                        .maxSets = 1 + max_models + 1, // +1 для теневого дескриптора
+                        .maxSets = 1 + max_models + 1,
                         .poolSizeCount = sizeof(pools) / sizeof(pools[0]),
                         .pPoolSizes = pools,
                 };
@@ -692,7 +535,6 @@ namespace {
                 }
             }
 
-            // Создаем descriptor set layout для глобальных uniform
             {
                 VkDescriptorSetLayoutBinding bindings[] = {
                         {
@@ -738,7 +580,6 @@ namespace {
                 }
             }
 
-            // Создаем descriptor set layout для материалов
             {
                 VkDescriptorSetLayoutBinding bindings[] = {
                         {
@@ -772,7 +613,6 @@ namespace {
                 }
             }
 
-            // Создаем pipeline layout
             {
                 VkDescriptorSetLayout set_layouts[] = {descriptor_set_layout_global, descriptor_set_layout_material};
                 VkPipelineLayoutCreateInfo layout_info{
@@ -787,7 +627,6 @@ namespace {
                 }
             }
 
-            // Создаем основной графический pipeline
             VkGraphicsPipelineCreateInfo info{
                     .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                     .stageCount = 2,
@@ -809,13 +648,10 @@ namespace {
             }
         }
 
-        // 4. Инициализация shadow mapping
         {
-            // Создаем изображение для карты теней
             shadow.size = 2048;
             shadow.depth_image_format = VK_FORMAT_D32_SFLOAT;
 
-            // Создаем изображение глубины
             VkImageCreateInfo image_info{
                     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
                     .imageType = VK_IMAGE_TYPE_2D,
@@ -836,8 +672,7 @@ namespace {
                 return;
             }
 
-            // Выделяем память для изображения
-            VkMemoryRequirements mem_reqs;
+                VkMemoryRequirements mem_reqs;
             vkGetImageMemoryRequirements(device, shadow.depth_image, &mem_reqs);
 
             VkMemoryAllocateInfo alloc_info{
@@ -855,7 +690,6 @@ namespace {
 
             vkBindImageMemory(device, shadow.depth_image, shadow.depth_image_memory, 0);
 
-            // Создаем image view
             VkImageViewCreateInfo view_info{
                     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                     .image = shadow.depth_image,
@@ -883,7 +717,6 @@ namespace {
                 return;
             }
 
-            // Проверяем, что буферы созданы
             if (!model_uniforms_buffer) {
                 std::cerr << "ERROR: model_uniforms_buffer is null! Cannot create shadow descriptors.\n";
                 veekay::app.running = false;
@@ -945,7 +778,6 @@ namespace {
                 return;
             }
 
-            // Создаем конвейер для теней
             VkPipelineShaderStageCreateInfo stage_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                     .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -1065,7 +897,7 @@ namespace {
 
             VkGraphicsPipelineCreateInfo pipeline_info{
                     .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                    .pNext = &rendering_create_info, // Добавьте это
+                    .pNext = &rendering_create_info,
                     .stageCount = 1,
                     .pStages = &stage_info,
                     .pVertexInputState = &input_state_info,
@@ -1077,7 +909,7 @@ namespace {
                     .pColorBlendState = &colorBlendState,
                     .pDynamicState = &dyn_state_info,
                     .layout = shadow.pipeline_layout,
-                    .renderPass = VK_NULL_HANDLE, // Для динамического рендеринга
+                    .renderPass = VK_NULL_HANDLE,
                     .subpass = 0,
                     .basePipelineHandle = VK_NULL_HANDLE,
                     .basePipelineIndex = -1,
@@ -1108,7 +940,6 @@ namespace {
                 return;
             }
 
-            // Обновляем дескрипторы теней
             VkDescriptorBufferInfo buffer_infos[] = {
                     {
                             .buffer = shadow.uniform_buffer->buffer,
@@ -1142,7 +973,6 @@ namespace {
             vkUpdateDescriptorSets(device, 2, write_infos, 0, nullptr);
         }
 
-        // 5. Создаем основной глобальный descriptor set
         {
             VkDescriptorSetAllocateInfo info{
                     .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1178,7 +1008,6 @@ namespace {
             vkUpdateDescriptorSets(device, 1, &shadow_write, 0, nullptr);
         }
 
-        // 7. Создаем меши
         // NOTE: Plane mesh initialization
         {
             std::vector<Vertex> vertices = {
@@ -1199,7 +1028,6 @@ namespace {
             plane_mesh.indices = uint32_t(indices.size());
         }
 
-        // NOTE: Cube mesh initialization
         {
             std::vector<Vertex> vertices = {
                     {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}},
@@ -1244,8 +1072,6 @@ namespace {
             cube_mesh.indices = uint32_t(indices.size());
         }
 
-        // 8. Добавляем источники света
-        // NOTE: Добавляем точечные источники света
         point_lights.emplace_back(PointLight{
                 .position = {0.0f, 2.0f, 0.0f},
                 .radius = 8.0f,
@@ -1272,7 +1098,6 @@ namespace {
                 .color = {0.8f, 0.5f, 1.0f},
         });
 
-        // NOTE: Добавляем прожекторы
         spot_lights.emplace_back(SpotLight{
                 .position = {3.0f, 3.0f, 0.0f},
                 .radius = 15.0f,
@@ -1302,7 +1127,6 @@ namespace {
                 .color = {1.0f, 1.0f, 0.5f},
         });
 
-        // 9. Добавляем модели в сцену с материалами
         models.clear();
         models.emplace_back(Model{
                 .mesh = plane_mesh,
@@ -1341,7 +1165,6 @@ namespace {
                 }
         });
 
-        // 10. Создаем descriptor sets для материалов
         {
             descriptor_sets_material.resize(models.size());
             if (!models.empty()) {
@@ -1363,7 +1186,6 @@ namespace {
             }
         }
 
-        // 11. Загружаем текстуры для материалов и настраиваем дескрипторы
         {
             auto load_png = [&](const char* path) -> veekay::graphics::Texture* {
                 uint32_t w = 0, h = 0;
@@ -1449,7 +1271,6 @@ namespace {
             }
         }
 
-        // 12. Обновляем глобальные дескрипторы (uniform буферы и storage буферы)
         {
             VkDescriptorBufferInfo buffer_infos[] = {
                     {
@@ -1518,7 +1339,6 @@ namespace {
     void shutdown() {
         VkDevice& device = veekay::app.vk_device;
 
-        // Очистка ресурсов теней
         vkDestroyFramebuffer(device, shadow.framebuffer, nullptr);
         vkDestroyRenderPass(device, shadow.render_pass, nullptr);
         vkDestroySampler(device, shadow.sampler, nullptr);
@@ -1714,7 +1534,6 @@ namespace {
             uniforms.albedo_color = model.material.albedo_color;
         }
 
-        // Вычисляем матрицу проекции теней (ортографическую из позиции солнца)
         {
             veekay::vec3 sun_light_direction = veekay::vec3::normalized(scene_uniforms.sun_light_direction);
 
@@ -1723,7 +1542,6 @@ namespace {
             float scene_width = 20.0f;
 
             shadow.matrix = veekay::mat4::lookAt(shadow_eye, camera.position) * veekay::mat4::ortho(-scene_width, scene_width, -scene_width, scene_width, 1.0f, 100.0f);
-            // Записываем в uniform буфер
             scene_uniforms.shadow_projection = shadow.matrix;
             *(veekay::mat4*)shadow.uniform_buffer->mapped_region = shadow.matrix;
 
@@ -1750,7 +1568,7 @@ namespace {
 
     void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
         vkResetCommandBuffer(cmd, 0);
-        { // NOTE: Start recording rendering commands
+        {
             VkCommandBufferBeginInfo info{
                     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -1758,9 +1576,7 @@ namespace {
             vkBeginCommandBuffer(cmd, &info);
         }
 
-        // Проход для записи глубины в карту теней с использованием динамического рендеринга
         {
-            // Барьер для перевода изображения из SHADER_READ_ONLY_OPTIMAL в DEPTH_STENCIL_ATTACHMENT_OPTIMAL
             VkImageMemoryBarrier barrier{
                     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                     .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
@@ -1784,7 +1600,6 @@ namespace {
                                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                                  0, 0, nullptr, 0, nullptr, 1, &barrier);
 
-            // Настройки динамического рендеринга для теней
             VkClearValue clear_depth{.depthStencil = {1.0f, 0}};
 
             VkRenderingAttachmentInfoKHR depth_attachment{
@@ -1806,10 +1621,8 @@ namespace {
                     .pStencilAttachment = nullptr,
             };
 
-            // Начинаем динамический рендеринг с использованием KHR функции
             vkCmdBeginRenderingKHR(cmd, &rendering_info);
 
-            // Устанавливаем viewport и scissor
             VkViewport viewport{
                     .x = 0.0f, .y = 0.0f,
                     .width = static_cast<float>(shadow.size),
@@ -1821,17 +1634,14 @@ namespace {
             VkRect2D scissor{{0, 0}, {shadow.size, shadow.size}};
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            // Устанавливаем смещение глубины
             vkCmdSetDepthBias(cmd, 1.25f, 0.0f, 1.75f);
 
-            // Биндим конвейер теней
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, shadow.pipeline);
 
             VkDeviceSize zero_offset = 0;
             VkBuffer current_vertex_buffer = VK_NULL_HANDLE;
             VkBuffer current_index_buffer = VK_NULL_HANDLE;
 
-            // Рисуем все модели
             for (size_t i = 0, n = models.size(); i < n; ++i) {
                 const Model& model = models[i];
                 const Mesh& mesh = model.mesh;
@@ -1853,10 +1663,8 @@ namespace {
                 vkCmdDrawIndexed(cmd, mesh.indices, 1, 0, 0, 0);
             }
 
-            // Заканчиваем динамический рендеринг
             vkCmdEndRenderingKHR(cmd);
 
-            // Барьер для перевода обратно в SHADER_READ_ONLY_OPTIMAL
             {
                 VkImageMemoryBarrier barrier{
                         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
